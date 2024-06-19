@@ -38,25 +38,13 @@
 bool g_passthrough = false; // native mode (use pico as simple TTL to USB)
 bool g_encrypted = true;    // FeliCa support and new readers (set to false for ICCA support, set to true otherwise)
 
-static char g_keypad_code[12] = 
-{'0', ',', '\337',
- '1', '2', '3', 
- '4', '5', '6', 
- '7', '8', '9'};
-
 static int g_keypad_mask[12] = 
 {ICCx_KEYPAD_MASK_0, ICCx_KEYPAD_MASK_00, ICCx_KEYPAD_MASK_EMPTY, 
  ICCx_KEYPAD_MASK_1, ICCx_KEYPAD_MASK_2, ICCx_KEYPAD_MASK_3, 
  ICCx_KEYPAD_MASK_4, ICCx_KEYPAD_MASK_5, ICCx_KEYPAD_MASK_6, 
  ICCx_KEYPAD_MASK_7, ICCx_KEYPAD_MASK_8, ICCx_KEYPAD_MASK_9};
 
-#ifdef DEBUG
-static const char* g_keypad_printable[12] = 
-{"0", "00", "empty",
- "1", "2", "3", 
- "4", "5", "6", 
- "7", "8", "9"};
-#endif
+static bool keypad_vals[12];
 
 static struct
 {
@@ -120,18 +108,25 @@ struct __attribute__((packed)) {
 
 static const char keymap[13] = KEYPAD_NKRO_MAP;
 
-void report_hid_key(int key)
+void report_hid_key()
 {
     if (!tud_hid_ready()) {
         return;
     }
 
-    int keystate = key;
+    uint16_t keys = 0;
+
+    for (int i = 0; i < 12; i++) {
+        if (keypad_vals[i]) {
+            keys |= (1 << i);
+        }
+    }
+
     for (int i = 0; i < 1; i++) {
-        uint8_t code = keymap[key];
+        uint8_t code = keymap[i];
         uint8_t byte = code / 8;
         uint8_t bit = code % 8;
-        if (keystate & (1 << i)) {
+        if (keys & (1 << i)) {
             hid_nkro.keymap[byte] |= (1 << bit);
         } else {
             hid_nkro.keymap[byte] &= ~(1 << bit);
@@ -250,6 +245,7 @@ int main(void)
         }
 
         report_hid_cardio();
+        report_hid_key();
     }
     return 0;
 }
@@ -281,21 +277,18 @@ void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
 
 #define IS_PRESSED(x) ((keystate&x)&&(!(prev_keystate&x)))
 #define IS_RELEASED(x) ((!(keystate&x))&&(prev_keystate&x))
-// static void check_key(uint8_t i, int keystate, int prev_keystate)
-// {
+static void check_key(uint8_t i, int keystate, int prev_keystate)
+{
 
-//  if (IS_PRESSED(g_keypad_mask[i]))
-//  {
-//   #ifdef DEBUG
-//     printf("%d", g_keypad_printable[i]);
-//   #endif
-// #ifdef WITH_USBHID
-//     Keyboard.press(g_keypad_code[i]);
-//  }
-//  else if (IS_RELEASED(g_keypad_mask[i]))
-//  {
-//     Keyboard.release(g_keypad_code[i]);
-// #endif  
-//  }
+ if (IS_PRESSED(g_keypad_mask[i]))
+ {
+#ifdef WITH_USBHID
+    keypad_vals[i] = true;
+ }
+ else if (IS_RELEASED(g_keypad_mask[i]))
+ { 
+    keypad_vals[i] = false;
+#endif  
+ }
 
-// }
+}
