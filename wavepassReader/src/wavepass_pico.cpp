@@ -16,13 +16,17 @@
 #define DEBUG
 #define ICCX_DEBUG true
 
+/* HID Keycode: https://github.com/hathach/tinyusb/blob/master/src/class/hid/hid.h */
+// Numpad: 1234567890-.
+#define KEYPAD_NKRO_MAP "\x59\x5a\x5b\x5c\x5d\x5e\x5f\x60\x61\x62\x56\x63"
+
 #ifdef WITH_USBHID
 #define USB_HID_COOLDOWN 3000
 #define cardio
 #endif
 
 /* ICCA-only (slotted) options */
-#define PIN_EJECT_BUTTON 7
+#define PIN_EJECT_BUTTON 8
 #define KEYPAD_BLANK_EJECT 1 // make blank key from keypad eject currently inserted card (ICCA only)
 #define AUTO_EJECT_TIMER 0   // auto eject valid cards after a set delay (in ms), 0 to disable (note: must be smaller than USB_HID_COOLDOWN)
 
@@ -34,12 +38,61 @@
 bool g_passthrough = false; // native mode (use pico as simple TTL to USB)
 bool g_encrypted = true;    // FeliCa support and new readers (set to false for ICCA support, set to true otherwise)
 
+static char g_keypad_code[12] = 
+{'0', ',', '\337',
+ '1', '2', '3', 
+ '4', '5', '6', 
+ '7', '8', '9'};
+
+static int g_keypad_mask[12] = 
+{ICCx_KEYPAD_MASK_0, ICCx_KEYPAD_MASK_00, ICCx_KEYPAD_MASK_EMPTY, 
+ ICCx_KEYPAD_MASK_1, ICCx_KEYPAD_MASK_2, ICCx_KEYPAD_MASK_3, 
+ ICCx_KEYPAD_MASK_4, ICCx_KEYPAD_MASK_5, ICCx_KEYPAD_MASK_6, 
+ ICCx_KEYPAD_MASK_7, ICCx_KEYPAD_MASK_8, ICCx_KEYPAD_MASK_9};
+
+#ifdef DEBUG
+static const char* g_keypad_printable[12] = 
+{"0", "00", "empty",
+ "1", "2", "3", 
+ "4", "5", "6", 
+ "7", "8", "9"};
+#endif
+
 static struct
 {
     uint8_t current[9];
     uint8_t reported[9];
     uint64_t report_time;
 } hid_cardio;
+
+void passthrough_loop()
+{
+    while (1)
+    {
+        tud_task();
+        if (tud_cdc_connected())
+        {
+            if (tud_cdc_available())
+            {
+                uint8_t buf[64];
+                uint32_t count = tud_cdc_read(buf, sizeof(buf));
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    uart_putc(uart1, buf[i]);
+                }
+            }
+            if (tud_cdc_write_flush())
+            {
+                uint8_t buf[64];
+                uint32_t count = tud_cdc_read(buf, sizeof(buf));
+                for (uint32_t i = 0; i < count; i++)
+                {
+                    uart_putc(uart1, buf[i]);
+                }
+            }
+        }
+    }
+}
 
 void report_hid_cardio()
 {
@@ -60,7 +113,34 @@ void report_hid_cardio()
     }
 }
 
-int main()
+struct __attribute__((packed)) {
+    uint8_t modifier;
+    uint8_t keymap[15];
+} hid_nkro;
+
+static const char keymap[13] = KEYPAD_NKRO_MAP;
+
+void report_hid_key(int key)
+{
+    if (!tud_hid_ready()) {
+        return;
+    }
+
+    int keystate = key;
+    for (int i = 0; i < 1; i++) {
+        uint8_t code = keymap[key];
+        uint8_t byte = code / 8;
+        uint8_t bit = code % 8;
+        if (keystate & (1 << i)) {
+            hid_nkro.keymap[byte] |= (1 << bit);
+        } else {
+            hid_nkro.keymap[byte] &= ~(1 << bit);
+        }
+    }
+    tud_hid_n_report(1, 0, &hid_nkro, sizeof(hid_nkro));
+}
+
+int main(void)
 {
     sleep_ms(50);
     set_sys_clock_khz(150000, true);
@@ -73,8 +153,8 @@ int main()
     gpio_pull_up(PIN_EJECT_BUTTON);
 
     uart_init(uart1, 57600);
-    gpio_set_function(4, GPIO_FUNC_UART);
-    gpio_set_function(5, GPIO_FUNC_UART);
+    gpio_set_function(6, GPIO_FUNC_UART);
+    gpio_set_function(7, GPIO_FUNC_UART);
     uart_set_hw_flow(uart1, false, false);
     uart_set_format(uart1, 8, 1, UART_PARITY_NONE);
     uart_set_fifo_enabled(uart1, false);
@@ -82,10 +162,14 @@ int main()
     // Enable the UART
     uart_set_irq_enables(uart1, true, false);
 
-    acio_open();
+    bool opened = acio_open();
 
-    sleep_ms(1000);
-    iccx_init(0, g_encrypted);
+    sleep_ms(500);
+
+    if (opened)
+    {
+        iccx_init(0, g_encrypted);
+    }
 
     while (1)
     {
@@ -101,6 +185,7 @@ int main()
         uint8_t uid[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         uint8_t type = 0;
         uint16_t keystate = 0;
+        static uint16_t prev_keystate = 0;
 
         if (!g_encrypted && gpio_get(PIN_EJECT_BUTTON) == 0)
         {
@@ -129,7 +214,11 @@ int main()
         }
 #endif
 
-        // TODO keychecking
+        for (int i = 0; i < 12; i++)
+        {
+            //check_key(i, keystate, prev_keystate);
+        }
+        prev_keystate = keystate;
 
         if (type)
         {
@@ -151,7 +240,7 @@ int main()
 #endif
 
             if (to_ms_since_boot(get_absolute_time()) - lastReport < USB_HID_COOLDOWN)
-                return;
+                continue;
 
             if (type == 1)
             {
@@ -163,34 +252,6 @@ int main()
         report_hid_cardio();
     }
     return 0;
-}
-
-void passthrough_loop() {
-    while (1)
-    {
-        tud_task();
-        if (tud_cdc_connected())
-        {
-            if (tud_cdc_available())
-            {
-                uint8_t buf[64];
-                uint32_t count = tud_cdc_read(buf, sizeof(buf));
-                for (uint32_t i = 0; i < count; i++)
-                {
-                    putchar(buf[i]);
-                }
-            }
-            if (tud_cdc_write_flush())
-            {
-                uint8_t buf[64];
-                uint32_t count = tud_cdc_read(buf, sizeof(buf));
-                for (uint32_t i = 0; i < count; i++)
-                {
-                    putchar(buf[i]);
-                }
-            }
-        }
-    }
 }
 
 // Invoked when received GET_REPORT control request
@@ -217,3 +278,24 @@ void tud_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts)
 {
     printf("\nCDC Line State: %d %d", dtr, rts);
 }
+
+#define IS_PRESSED(x) ((keystate&x)&&(!(prev_keystate&x)))
+#define IS_RELEASED(x) ((!(keystate&x))&&(prev_keystate&x))
+// static void check_key(uint8_t i, int keystate, int prev_keystate)
+// {
+
+//  if (IS_PRESSED(g_keypad_mask[i]))
+//  {
+//   #ifdef DEBUG
+//     printf("%d", g_keypad_printable[i]);
+//   #endif
+// #ifdef WITH_USBHID
+//     Keyboard.press(g_keypad_code[i]);
+//  }
+//  else if (IS_RELEASED(g_keypad_mask[i]))
+//  {
+//     Keyboard.release(g_keypad_code[i]);
+// #endif  
+//  }
+
+// }

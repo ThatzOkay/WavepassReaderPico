@@ -8,7 +8,6 @@ add_executable(wavepass_pico wavepass_pico.cpp usb_descriptors.cpp ACIO.cpp ICCx
 pico_set_program_name(wavepass_pico "wavepass_pico")
 pico_set_program_version(wavepass_pico "0.1")
 
-pico_enable_stdio_uart(wavepass_pico 0)
 pico_enable_stdio_usb(wavepass_pico 1)
 
 # Add the standard library to the build

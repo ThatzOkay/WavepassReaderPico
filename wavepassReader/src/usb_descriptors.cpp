@@ -75,10 +75,9 @@ uint8_t const desc_hid_report_cardio[] = {
     WAVEPASS_PICO_REPORT_DESC_CARDIO,
 };
 
-// uint8_t const desc_hid_report_nkro[] = {
-//     AIC_PICO_REPORT_DESC_NKRO,
-// };
-
+uint8_t const desc_hid_report_nkro[] = {
+    WAVEPASS_PICO_REPORT_DESC_NKRO,
+};
 
 // Invoked when received GET HID REPORT DESCRIPTOR
 // Application return pointer to descriptor
@@ -88,26 +87,26 @@ uint8_t const* tud_hid_descriptor_report_cb(uint8_t itf)
     switch (itf) {
         case 0:
             return desc_hid_report_cardio;
-        // case 1:
-        //     return desc_hid_report_nkro;
+        case 1:
+            return desc_hid_report_nkro;
         default:
             return NULL;
     }
 }
+
 //--------------------------------------------------------------------+
 // Configuration Descriptor
 //--------------------------------------------------------------------+
 
-enum { ITF_NUM_CARDIO, ITF_NUM_NKRO, ITF_NUM_LIGHT,
+enum { ITF_NUM_CARDIO, ITF_NUM_NKRO,
        ITF_NUM_SERIAL, ITF_NUM_SERIAL_DATA,
        ITF_NUM_EAMUSE, ITF_NUM_EAMUSE_DATA,
        ITF_NUM_TOTAL };
 
-#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 3 + TUD_CDC_DESC_LEN * 2)
+#define CONFIG_TOTAL_LEN (TUD_CONFIG_DESC_LEN + TUD_HID_DESC_LEN * 2 + TUD_CDC_DESC_LEN * 2)
 
 #define EPNUM_CARDIO 0x81
 #define EPNUM_KEY 0x82
-#define EPNUM_LIGHT 0x83
 
 #define EPNUM_SERIAL_NOTIF 0x85
 #define EPNUM_SERIAL_OUT   0x06
@@ -125,18 +124,18 @@ uint8_t const desc_configuration_dev[] = {
 
     // Interface number, string index, protocol, report descriptor len, EP In
     // address, size & polling interval
-    TUD_HID_DESCRIPTOR(ITF_NUM_CARDIO, 4, HID_ITF_PROTOCOL_NONE,
+    TUD_HID_DESCRIPTOR(ITF_NUM_CARDIO, 3, HID_ITF_PROTOCOL_NONE,
                        sizeof(desc_hid_report_cardio), EPNUM_CARDIO,
                        CFG_TUD_HID_EP_BUFSIZE, 1),
 
-    // TUD_HID_DESCRIPTOR(ITF_NUM_NKRO, 5, HID_ITF_PROTOCOL_NONE,
-    //                    sizeof(desc_hid_report_nkro), EPNUM_KEY,
-    //                    CFG_TUD_HID_EP_BUFSIZE, 1),
+    TUD_HID_DESCRIPTOR(ITF_NUM_NKRO, 4, HID_ITF_PROTOCOL_NONE,
+                       sizeof(desc_hid_report_nkro), EPNUM_KEY,
+                       CFG_TUD_HID_EP_BUFSIZE, 1),
 
-    TUD_CDC_DESCRIPTOR(ITF_NUM_SERIAL, 6, EPNUM_SERIAL_NOTIF,
+    TUD_CDC_DESCRIPTOR(ITF_NUM_SERIAL, 5, EPNUM_SERIAL_NOTIF,
                        8, EPNUM_SERIAL_OUT, EPNUM_SERIAL_IN, 64),
 
-    TUD_CDC_DESCRIPTOR(ITF_NUM_EAMUSE, 7, EPNUM_EAMUSE_NOTIF,
+    TUD_CDC_DESCRIPTOR(ITF_NUM_EAMUSE, 6, EPNUM_EAMUSE_NOTIF,
                        8, EPNUM_EAMUSE_OUT, EPNUM_EAMUSE_IN, 64),
 };
 
@@ -162,6 +161,7 @@ const char *string_desc_arr[] = {
     "WAVEPASS Pico CardIO",
     "WAVEPASS Pico SERIAL Port",
     "WAVEPASS Pico EAMUSE Port",
+    "AIC Pico Keypad",
 };
 
 // Invoked when received GET STRING DESCRIPTOR request

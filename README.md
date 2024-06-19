@@ -1,5 +1,5 @@
 # WavepassReader
-Ported to pi pico using original WavePass code from [CrazyRedMachine WavePass](https://github.com/CrazyRedMachine/WavepassReader) and the usb hid part from [whowechina aic_pico](https://github.com/whowechina/aic_pico)
+Ported to pi pico using original WavePass code from [CrazyRedMachine WavePass](https://github.com/CrazyRedMachine/WavepassReader) and the usb hid and some main parts from [whowechina aic_pico](https://github.com/whowechina/aic_pico)
 
 USB HID card reader (cardIO) for official Konami eAmusement slotted and wavepass readers (ICCA, ICCB, ICCC) 
 

@@ -273,6 +273,7 @@ static bool iccx_get_state(uint8_t node_id, iccx_state_t *state, bool encrypted)
 
 static bool iccx_read_card(uint8_t node_id, iccx_state_t *state, bool encrypted)
 {
+
     struct ac_io_message msg;
 
     msg.addr = node_id + 1;

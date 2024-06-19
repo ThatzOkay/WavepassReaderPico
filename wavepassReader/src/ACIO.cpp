@@ -4,7 +4,7 @@
 #include "hardware/uart.h"
 #include <cstring>
 
-#define ACIO_DEBUG
+//#define ACIO_DEBUG
 
 static uint8_t acio_msg_counter = 1;
 static uint8_t acio_node_count;
@@ -61,6 +61,12 @@ bool acio_send(const uint8_t *buffer, int length)
     }
     printf("\n");
 #endif
+
+    if (!uart_is_writable(uart1))
+    {
+        return false;
+    }
+
     uart_write_blocking(uart1, send_buf, send_buf_pos);
 //     size_t written = 
 //     if (Serial1.write(send_buf, send_buf_pos) != send_buf_pos)
@@ -84,9 +90,19 @@ int acio_receive(uint8_t *buffer, int size)
     /* reading a byte stream, we are getting a varying amount
        of 0xAAs before we get a valid message. */
     recv_buf[0] = AC_IO_SOF;
+    
+    int retry = 0;
+
     do {
-        while (!uart_is_readable(uart1)) {
-            tight_loop_contents();
+
+        if (retry == 3) {
+            return -1;
+        }
+
+        if (!uart_is_readable(uart1))
+        {
+            retry++;
+            continue;
         }
 
         // Read a single byte from the UART
@@ -211,7 +227,7 @@ bool acio_send_and_recv(struct ac_io_message *msg, int resp_size)
     msg->cmd.seq_no = acio_msg_counter++;
     int send_size = offsetof(struct ac_io_message, cmd.raw) + msg->cmd.nbytes;
 
-    if (acio_send((uint8_t *)msg, send_size) <= 0)
+    if (!acio_send((uint8_t *)msg, send_size))
     {
         return false;
     }
@@ -242,23 +258,43 @@ bool acio_send_and_recv(struct ac_io_message *msg, int resp_size)
     return true;
 }
 
-static void acio_init(void)
+static bool acio_init(void)
 {
+
+int retry = 3;
 
 #ifdef ACIO_DEBUG
     printf("INIT DEVICE \n");
 #endif
     uint8_t read_buff = 0x00;
-
     /* init/reset the device by sending 0xAA until 0xAA is returned */
     do
     {
+        if (retry == 3) {
+            return false;
+        }
+
         uart_putc(uart1, AC_IO_SOF);
 
 #ifdef ACIO_DEBUG
         printf("Sent : 0xAA \n");
 #endif
+        if (!uart_is_readable(uart1))
+        {
+            retry++;
+            continue;
+        }
+
         read_buff = uart_getc(uart1);
+
+        // if nothing is received no device is connected
+        if (read_buff == 0xFF)
+        {
+#ifdef ACIO_DEBUG
+            printf("No device connected \n");
+#endif
+            return false;
+        }
 
 #ifdef ACIO_DEBUG
         printf("Recv : 0x");
@@ -278,6 +314,7 @@ static void acio_init(void)
 #ifdef ACIO_DEBUG
     printf("Buffer cleared \n");
 #endif
+    return true;
 }
 
 static uint8_t acio_enum_nodes(void)
@@ -372,7 +409,13 @@ static bool acio_start_node(uint8_t node_id)
 
 bool acio_open()
 {
-    acio_init();
+    bool init_success = acio_init();
+
+    if (!init_success)
+    {
+        return false;
+    }
+
     acio_node_count = acio_enum_nodes();
     if (acio_node_count == 0)
     {
