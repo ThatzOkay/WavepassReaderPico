@@ -61,4 +61,4 @@ jobs:
       working-directory: ${{github.workspace}}/WavepassReaderPico/wavepassReader/build
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
-      run: cmake --build . --config $BUILD_TYPE --parallel $(nproc)
+      run: cmake --build . --parallel $(nproc)
