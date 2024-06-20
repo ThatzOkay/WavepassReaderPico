@@ -62,3 +62,8 @@ jobs:
       shell: bash
       # Execute the build.  You can specify a specific target with "--target <NAME>"
       run: cmake --build . --parallel $(nproc)
+    - name: Upload a Build Artifact
+      uses: actions/upload-artifact@v4.3.3
+      with:
+        name: WavepassReaderPico
+        path: ${{github.workspace}}/WavepassReaderPico/wavepassReader/build/src/*.uf2
