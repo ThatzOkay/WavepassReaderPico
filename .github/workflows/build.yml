@@ -18,10 +18,10 @@ jobs:
         rm -rf "${{ github.workspace }}"
         mkdir -p "${{ github.workspace }}"
 
-    - name: Checkout pico-examples
+    - name: Checkout WavepassReaderPico
       uses: actions/checkout@v2
       with:
-        path: pico-examples
+        path: WavepassReaderPico
 
     - name: Checkout pico-sdk/develop
       uses: actions/checkout@v2
